@@ -1,0 +1,68 @@
+apiVersion: v1                      
+kind: Namespace
+metadata:
+  name: ggithubcom-kyverno-kyverno-ns
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: Channel
+metadata:
+  name: ggithubcom-kyverno-kyverno
+  namespace: ggithubcom-kyverno-kyverno-ns
+spec:
+  type: Git
+  pathname: 'https://github.com/kyverno/kyverno'
+---
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  namespace: kyverno
+  name: kyverno
+  annotations:
+    apps.open-cluster-management.io/deployables: ''
+  selfLink: /apis/app.k8s.io/v1beta1/namespaces/kyverno/applications/kyverno
+spec:
+  componentKinds:
+    - group: apps.open-cluster-management.io
+      kind: Subscription
+  descriptor: {}
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - kyverno
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: Subscription
+metadata:
+  namespace: kyverno
+  name: kyverno-subscription-1
+  annotations:
+    apps.open-cluster-management.io/deployables: >-
+      kyverno/kyverno-subscription-1-definitions-release-policyreports.wgpolicyk8s.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-reportchangerequests.kyverno.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-init-config-configmap,kyverno/kyverno-subscription-1-definitions-release-clusterpolicies.kyverno.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-kyverno-service-account-serviceaccount,kyverno/kyverno-subscription-1-definitions-release-kyverno-deployment,kyverno/kyverno-subscription-1-definitions-release-kyverno-svc-service,kyverno/kyverno-subscription-1-definitions-release-clusterpolicyreports.wgpolicyk8s.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-kyverno-namespace,kyverno/kyverno-subscription-1-definitions-release-policies.kyverno.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-clusterreportchangerequests.kyverno.io-customresourcedefinition,kyverno/kyverno-subscription-1-definitions-release-generaterequests.kyverno.io-customresourcedefinition
+    apps.open-cluster-management.io/git-branch: main
+    apps.open-cluster-management.io/git-path: definitions/release
+    apps.open-cluster-management.io/reconcile-option: merge
+  labels:
+    app: kyverno
+  selfLink: /apis/apps.open-cluster-management.io/v1/namespaces/kyverno/subscriptions/kyverno-subscription-1
+spec:
+  channel: ggithubcom-kyverno-kyverno-ns/ggithubcom-kyverno-kyverno
+  placement:
+    placementRef:
+      name: kyverno-placement-1
+      kind: PlacementRule
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  namespace: kyverno
+  name: kyverno-placement-1
+  annotations: {}
+  labels:
+    app: kyverno
+  selfLink: /apis/apps.open-cluster-management.io/v1/namespaces/kyverno/placementrules/kyverno-placement-1
+spec:
+  clusterConditions:
+    - status: 'True'
+      type: ManagedClusterConditionAvailable
