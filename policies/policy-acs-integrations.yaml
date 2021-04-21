@@ -1,0 +1,101 @@
+# This policy applies resources to help integrate ACS and ACM.
+#
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-acs-integrations
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-acs-integrations
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          namespaceSelector:
+            include:
+              - "default"
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                data:
+                  policy.json: |
+                    {
+                    "active_policies": [
+                        {
+                            "policy_name": "Compiler Tool Execution",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "Curl in Image",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "90-Day Image Age",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "ACM Privileged Container",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "Process with UID 0",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "No resource requests or limits specified",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "Privileged Container",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "Fixable CVSS >= 7",
+                            "cluster_id": ""
+                        },
+                        {
+                            "policy_name": "Fixable CVSS >= 8",
+                            "cluster_id": ""
+                        }
+                        ]
+                    }
+                kind: ConfigMap
+                metadata:
+                  name: acs-active-policy-configmap
+                  namespace: default
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-acs-integrations
+placementRef:
+  name: placement-policy-acs-integrations
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-acs-integrations
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-acs-integrations
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: name, operator: In, values: ["local-cluster"]}

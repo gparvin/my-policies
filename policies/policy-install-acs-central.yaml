@@ -1,0 +1,236 @@
+# This policy installs the ACS central helm chart to the cluster the policy is deployed to.
+# This policy requires stackrox to be installed in the stackrox namespace which must have
+# one secret manually created containing the image access dockerconfig.
+#
+# Example commands to create the required secrets:
+# oc create secret docker-registry stackrox -n stackrox --docker-username=user --docker-password=password --docker-server=https://stackrox.io
+#
+# This policy must be set to enforce to initiate the install of ACS central.
+# 
+# After installation of this policy, you must get the contents of the helmrelease resource
+# to obtain the initial admin password for the Stackrox Central server.
+# Example: oc get helmrelease -n stackrox stackrox-central-services -o yaml
+#
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-install-acs-central
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: inform # Change to enforce to install ACS Central Server
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-namespace
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          namespaceSelector:
+            include: ["stackrox"]
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: stackrox
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: stackrox-channel
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-app
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          namespaceSelector:
+            include: ["stackrox"]
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: app.k8s.io/v1beta1
+                kind: Application
+                metadata:
+                  name: advanced-cluster-security
+                  namespace: stackrox
+                spec:
+                  selector:
+                    matchLabels:
+                      acm-app: advanced-cluster-security
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-channel
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: apps.open-cluster-management.io/v1
+                kind: Channel
+                metadata:
+                  name: advanced-cluster-security-ch
+                  namespace: stackrox-channel
+                  labels:
+                    acm-app: advanced-cluster-security
+                spec:
+                  type: HelmRepo
+                  pathname: https://charts.stackrox.io
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-sub
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: apps.open-cluster-management.io/v1
+                kind: Subscription
+                metadata:
+                  namespace: stackrox
+                  name: advanced-cluster-security
+                  labels:
+                    acm-app: advanced-cluster-security
+                spec:
+                  name: stackrox-central-services
+                  channel: stackrox-channel/advanced-cluster-security-ch
+                  packageFilter:
+                    version: 58.0.0
+                  packageOverrides:
+                    - packageName: stackrox-central-services
+                      packageAlias: stackrox-central-services
+                      packageOverrides:
+                      - path: spec
+                        value:
+                            imagePullSecrets:
+                              useFromDefaultServiceAccount: false
+                              allowNone: true
+                            image:
+                              registry: stackrox.io
+                            env:
+                              openshift: true
+                              istio: false
+                              platform: default
+                              offlineMode: false
+                            central:
+                              disableTelemetry: false
+                              config: |
+                                maintenance:
+                                  safeMode: false
+                                  compaction:
+                                    enabled: true
+                                    bucketFillFraction: .5
+                                    freeFractionThreshold: 0.75
+                              endpointsConfig: |
+                                endpoints:
+                                - listen: ":8080"
+                                  protocols:
+                                  - http
+                                  tls:
+                                    disable: true
+                              resources:
+                                requests:
+                                  memory: "4Gi"
+                                  cpu: "1500m"
+                                limits:
+                                  memory: "8Gi"
+                                  cpu: "4000m"
+                              persistence:
+                                persistentVolumeClaim:
+                                  claimName: stackrox-db
+                                  createClaim: true
+                                  size: 10
+                              exposure:
+                                route:
+                                  enabled: true
+                            scanner:
+                              disable: false
+                              replicas: 2
+                              logLevel: INFO
+                              autoscaling:
+                                disable: true
+                              resources:
+                                requests:
+                                  memory: "1500Mi"
+                                  cpu: "1000m"
+                                limits:
+                                  memory: "3000Mi"
+                                  cpu: "2000m"
+                              dbResources:
+                                limits:
+                                  cpu: "2000m"
+                                  memory: "4Gi"
+                                requests:
+                                  cpu: "200m"
+                                  memory: "200Mi"
+                            customize:
+                              labels:
+                                acm-app: advanced-cluster-security
+                  placement:
+                    placementRef:
+                      name: advanced-cluster-security
+                      kind: PlacementRule
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-placement
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: apps.open-cluster-management.io/v1
+                kind: PlacementRule
+                metadata:
+                  namespace: stackrox
+                  name: advanced-cluster-security
+                  labels:
+                    acm-app: advanced-cluster-security
+                spec:
+                  clusterSelector:
+                    matchLabels:
+                      local-cluster: 'true'
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-install-acs-central
+placementRef:
+  name: placement-policy-install-acs-central
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-install-acs-central
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-install-acs-central
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: environment, operator: In, values: ["dev"]}

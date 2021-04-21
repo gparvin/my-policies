@@ -1,0 +1,110 @@
+# This policy installs the ACS Secured Cluster Services helm chart to the clusters the policy is deployed to.
+# This policy requires the namespace for the install to be: stackrox
+# Several secrets must be created by running the script <reference> and applying the created yaml to the RHACM hub.
+#
+# Example commands to create the required secrets:
+# curl <location> -o acs-secrets-deployer.yaml
+# oc apply -f acs-secrets-deployer.yaml
+#
+# This policy must be set to enforce to initiate the install of ACS Secured Cluster Services.
+# 
+# Customize the following values in the Subscription:
+# - The CA certificate for the central server
+# - The central server hostname
+#
+#
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-cluster-services-local
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: enforce # Change to enforce to install ACS Secured Cluster Services
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-cluster-sub
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: apps.open-cluster-management.io/v1
+                kind: HelmRelease
+                metadata:
+                  annotations:
+                    apps.open-cluster-management.io/hosting-subscription: stackrox/stackrox-secured-cluster-services-local
+                    apps.open-cluster-management.io/sync-source: subhelm-stackrox/stackrox-secured-cluster-services-local
+                  finalizers:
+                  - uninstall-helm-release
+                  namespace: stackrox
+                  name: secured-cluster-services
+                repo:
+                  chartName: stackrox-secured-cluster-services
+                  source:
+                    helmRepo:
+                      urls:
+                      - https://charts.stackrox.io/stackrox-secured-cluster-services-58.0.0.tgz
+                    type: helmrepo
+                  version: 58.0.0
+                spec:
+                  allowNonstandardReleaseName: true
+                  centralEndpoint: central-stackrox.apps.policy-grc-cp-autoclaims-cjcz2.dev08.red-chesterfield.com:443
+                  clusterName: local-cluster
+                  createSecrets: false
+                  ca:
+                      cert: |
+                          -----BEGIN CERTIFICATE-----
+                          MIIDPTCCAiWgAwIBAgIQMNwK8KoBGMVSAIolteVxZjANBgkqhkiG9w0BAQsFADAp
+                          MScwJQYDVQQDEx5TdGFja1JveCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkwHhcNMjEw
+                          NDIxMTIyMTEwWhcNMjYwNDIwMTIyMTEwWjApMScwJQYDVQQDEx5TdGFja1JveCBD
+                          ZXJ0aWZpY2F0ZSBBdXRob3JpdHkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+                          AoIBAQC1tTHcszV1q3ahomxCZyoJd9lk5C/eJme30D1QmMOfbmIUqsCQZ9Ni6j7C
+                          +3E2VE2MpNNNT1igRls63y6gcoEW3Z1Rd9/atx83P+5QE2lWpFfmCCBdr61h/UTs
+                          zkxBGMKZVAPqx3QDFVrGA1IwrL78VROOLKc9oC8Ys3L5wxp8xf8n5OFuKTrb96rB
+                          1HEE7hObDUm1+OC1OACmqBJQYGXDJ+LIa1HXiNxyWFS/uZ3cB9U9Zc3lo0utx588
+                          fi9+LKSPAj4YWI5Xs9CdvVt7EKcHA8/2dCLO0GMZpJeYjuF9V9zTJ/KG6OHSVdSg
+                          QX1XGPRizwDJn4M3IioMzMfXGyGpAgMBAAGjYTBfMA4GA1UdDwEB/wQEAwICpDAd
+                          BgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDwYDVR0TAQH/BAUwAwEB/zAd
+                          BgNVHQ4EFgQUsNdbIVaekdf4CJM4PGlAngL8AtUwDQYJKoZIhvcNAQELBQADggEB
+                          AAVjoa6akbM0TiGYqxH1xmWakJL9smXK1IOEXBHz1wvsmo/IA4PulPt9n8euc8s8
+                          rwRgr1KLcLDdBQ+CbabDstaPdnIYBKQwsXCDAFQZuDYJ60bmX2GlNJ5nqxXoQhBT
+                          P86MOYT1b2FxXt9BcEnTKGfwRgsyxYIbWPlRJpvxCmJChqkhbiql1kUpuAS6pJnX
+                          oS8tu5kRjvdL6fnKs8h53REfy0lW0MUpOlTNlsqpNPy/CJzKVQuXpp4jIzPoRdJr
+                          BFw6hb6riZ4ceY+SiEc1GPO1AODGFHpm/GuNvG+WxjgtThyXvvxhJNBVPHkQP/yW
+                          e5fNVUvyyl6UmuzPBJwuxCs=
+                          -----END CERTIFICATE-----
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-cluster-services-local
+placementRef:
+  name: placement-policy-cluster-services-local
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-cluster-services-local
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-cluster-services-local
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: name, operator: In, values: ["local-cluster"]}
+

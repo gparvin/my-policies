@@ -1,0 +1,65 @@
+# This policy looks for PolicyReport resources that contain failures in the results.
+# These failures mean a compliance check was performed and there are resources that 
+# do not meet the compliance rules.
+#
+# Set remediationAction to "inform" to receive a list of PolicyReport 
+# resources that have a result of "error".
+
+# Change the placement rule and the namespace selector to match where PolicyReports will
+# be available.
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-acs-policy-alerts
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-acs-alerts
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          namespaceSelector:
+            include:
+              - "acm-acs-demo"
+          object-templates:
+            - complianceType: mustnothave
+              objectDefinition:
+                apiVersion: wgpolicyk8s.io/v1alpha2
+                kind: PolicyReport
+                results:
+                - result: error
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-acs-alerts
+placementRef:
+  name: placement-policy-acs-alerts
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-acs-policy-alerts
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-acs-alerts
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: name, operator: In, values: ["local-cluster"]}

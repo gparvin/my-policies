@@ -1,0 +1,88 @@
+# This policy looks for MachineConfigPools to determine if fips is configured.
+#
+# Set remediationAction to "inform" to receive violations when the MachineConfigPool 
+# does not have fips configured.
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-ocp-check-fips
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-ocp-check-fips-master
+        spec:
+          namespaceSelector:
+            include: ["default"]
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: machineconfiguration.openshift.io/v1
+                kind: MachineConfigPool
+                metadata:
+                  name: master
+                status:
+                  configuration:
+                    source:
+                      - apiVersion: machineconfiguration.openshift.io/v1
+                        kind: MachineConfig
+                        name: 99-master-fips
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-ocp-check-fips-worker
+        spec:
+          namespaceSelector:
+            include: ["default"]
+          remediationAction: inform
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: machineconfiguration.openshift.io/v1
+                kind: MachineConfigPool
+                metadata:
+                  name: worker
+                status:
+                  configuration:
+                    source:
+                      - apiVersion: machineconfiguration.openshift.io/v1
+                        kind: MachineConfig
+                        name: 99-worker-fips
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-ocp-check-fips
+placementRef:
+  name: placement-policy-ocp-check-fips
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-ocp-check-fips
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-ocp-check-fips
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: environment, operator: In, values: ["dev"]}
