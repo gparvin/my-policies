@@ -1,0 +1,96 @@
+# This policy installs the ACS Secured Cluster Services helm chart to the clusters the policy is deployed to.
+# This policy requires the namespace for the install to be: stackrox
+# Several secrets must be created by running the script <reference> and applying the created yaml to the RHACM hub.
+#
+# Example commands to create the required secrets:
+# curl <location> -o secured-cluster-secrets.sh
+# export ROX_API_TOKEN=<token-from-central-server>
+# ./secured-cluster-secrets.sh -u <stackrox-userid> -i bundle.yaml -a <central-server-hostname:port>
+# oc apply -f acs-secrets-deployer.yaml
+#
+# This policy must be set to enforce to initiate the install of ACS Secured Cluster Services.
+# 
+# Customize the following values in the Subscription:
+# - The CA certificate for the central server
+# - The central server hostname
+#
+# Update the PlacementRule to distribute this policy to clusters that will be managed
+# by the specified ACS Central Server.  Make sure remediationAction is enforce.
+
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-install-acs-cluster-services
+  annotations:
+    policy.open-cluster-management.io/standards: NIST 800-53
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: enforce # Change to enforce to install ACS Secured Cluster Services
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: policy-install-acs-cluster-sub
+        spec:
+          remediationAction: inform # will be overridden by remediationAction in parent policy
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: apps.open-cluster-management.io/v1
+                kind: HelmRelease
+                metadata:
+                  annotations:
+                    apps.open-cluster-management.io/hosting-subscription: stackrox/stackrox-secured-cluster-services-local
+                    apps.open-cluster-management.io/sync-source: subhelm-stackrox/stackrox-secured-cluster-services-local
+                  finalizers:
+                  - uninstall-helm-release
+                  namespace: stackrox
+                  name: secured-cluster-services
+                repo:
+                  chartName: stackrox-secured-cluster-services
+                  source:
+                    helmRepo:
+                      urls:
+                      - https://charts.stackrox.io/stackrox-secured-cluster-services-58.0.0.tgz
+                    type: helmrepo
+                  version: 58.0.0
+                spec:
+                  allowNonstandardReleaseName: true
+                  centralEndpoint: |
+                    {{ ( index ( lookup "v1" "ConfigMap" "stackrox" "acs-config" ).data "acs-host" ) }}
+                  clusterName: |
+                    {{ fromSecret "open-cluster-management-agent" "hub-kubeconfig-secret" "cluster-name" | base64dec }}
+                  createSecrets: false
+                  ca:
+                      cert: |
+{{ ( index ( lookup "v1" "Secret" "stackrox" "sensor-tls" ).data "ca.pem" ) | base64dec | indent 26 }}
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-install-acs-cluster-services
+placementRef:
+  name: placement-policy-install-acs-cluster-services
+  kind: PlacementRule
+  apiGroup: apps.open-cluster-management.io
+subjects:
+- name: policy-install-acs-cluster-services
+  kind: Policy
+  apiGroup: policy.open-cluster-management.io
+---
+apiVersion: apps.open-cluster-management.io/v1
+kind: PlacementRule
+metadata:
+  name: placement-policy-install-acs-cluster-services
+spec:
+  clusterConditions:
+  - status: "True"
+    type: ManagedClusterConditionAvailable
+  clusterSelector:
+    matchExpressions:
+      - {key: environment, operator: In, values: ["dev"]}
+

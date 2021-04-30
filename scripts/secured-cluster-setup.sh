@@ -26,7 +26,7 @@ help () {
 }
 
 if [ -z "$ROX_API_TOKEN" ]; then
-	echo "The ROX_API_TOKEN environment variable must be set."
+	echo "The ROX_API_TOKEN environment variable must be set to a valid API token."
 	exit 1
 fi
 
@@ -190,6 +190,16 @@ metadata:
   name: sensor-tls
   namespace: ${NAMESPACE}-staging
 type: Opaque
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations:
+    apps.open-cluster-management.io/deployables: "true"
+  name: acs-config
+  namespace: ${NAMESPACE}-staging
+data:
+  acs-host: ${ACS_HOST}
 ---
 apiVersion: apps.open-cluster-management.io/v1
 kind: Channel
